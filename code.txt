@@ -1,0 +1,580 @@
+where by on loading the web system they've menu icon in the top header having with title ELMS | Employee Leave Mgt with green like color
+in the body. there's a side bar having items like Employee Login, Employee Password Recovery, and Admin Login.
+When  you click item on sidebar its content such a beautiful form for employee login is displayed in the middle or in the mainbar.
+First provide code for this.
+
+
+no, the GUI of admin dashboard you've provided is not good atall, its too basic, not beautiful. please build from this code of my first page. In department, leave type and employee use drop down using icon like > to indicate drop down menu. please use php mysql, dont use pdo, atleast use objected mysqli, like new mysqli() html and css, with css. build it from my css file, ill provide you with css file as well. here is codes for you to use to build my admin dashboard
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+session_start();
+require_once 'connection.php'; // Make sure this file exists
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Sanitize inputs
+    if (isset($_POST['username']) && isset($_POST['password']) && isset($_POST['usertype'])) {
+        $username = htmlspecialchars(trim($_POST["username"]));
+        $password = $_POST["password"];
+        $inputUsertype = htmlspecialchars(trim($_POST["usertype"]));
+
+        if (!in_array($inputUsertype, ['admin', 'emp'])) {
+            $error = "Invalid user type";
+        } else {
+            $table = ($inputUsertype === 'emp') ? 'emp' : 'admin';
+            $sql = "SELECT * FROM " . $table . " WHERE username = ?";
+            $stmt = $con->prepare($sql);
+
+            if ($stmt === false) {
+                $error = "Database error";
+            } else {
+                $stmt->bind_param("s", $username);
+                $stmt->execute();
+                $result = $stmt->get_result();
+
+                if ($result->num_rows == 1) {
+                    $user = $result->fetch_assoc();
+                    // Verify password
+                    if (password_verify($password, $user['password'])) {
+                        if ($user['usertype'] === $inputUsertype) {
+                            $_SESSION["uid"] = $user["id"];
+                            $_SESSION["username"] = $user["username"];
+                            $_SESSION["usertype"] = $user["usertype"];
+                            
+                            session_regenerate_id(true);
+                            
+                            header("Location: " . ($inputUsertype === 'emp' ? 'emp_dash.php' : 'admin_dash.php'));
+                            exit();
+                        } else {
+                            $error = "Invalid user type for this account";
+                        }
+                    } else {
+                        $error = "Invalid username or password";
+                    }
+                } else {
+                    $error = "Invalid username or password";
+                }
+
+                $stmt->close();
+            }
+        }
+    }
+
+    // Password Recovery Handling
+    if (isset($_POST['email'])) {
+        $email = htmlspecialchars(trim($_POST["email"]));
+        
+        // Check if email exists in the database
+        $sql = "SELECT * FROM admin WHERE email = ?";
+        $stmt = $con->prepare($sql);
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows == 1) {
+            $user = $result->fetch_assoc();
+            
+            // Generate a reset token
+            $token = bin2hex(random_bytes(50));
+            $expires = date("U") + 3600; // 1 hour expiration
+
+            // Store the token in the database
+            $sql = "INSERT INTO password_resets (email, token, expires) VALUES (?, ?, ?)";
+            $stmt = $con->prepare($sql);
+            $stmt->bind_param("ssi", $email, $token, $expires);
+            $stmt->execute();
+
+            // Send reset email
+            $resetLink = "http://yourdomain.com/reset_password.php?token=" . $token; // Update with your domain
+            $mail = new PHPMailer;
+            // Configure PHPMailer (SMTP settings)
+            $mail->setFrom('your_email@example.com', 'Your Name');
+            $mail->addAddress($email);
+            $mail->Subject = 'Password Reset Request';
+            $mail->Body = "Click this link to reset your password: $resetLink";
+            if ($mail->send()) {
+                echo "An email has been sent to your email address.";
+            } else {
+                echo "Mailer Error: " . $mail->ErrorInfo;
+            }
+        } else {
+            echo "Email not found.";
+        }
+
+        $stmt->close();
+    }
+
+    $con->close();
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELMS | Employee Leave Mgt</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="authcss/auth_styles.css">
+</head>
+<body>
+    <header>
+        <h4>ELMS | EMPLOYEE LEAVE MGT</h4>
+    </header>
+    <div class="container">
+        <div class="sidebar">
+            <ul>
+                <li><a href="?type=emp"><i class="fas fa-user-tie">&nbsp; Employee Login</i></a></li>
+                <li><a href="?type=password-recovery"><i class="fas fa-key">&nbsp; Employee Password Recovery</i></a></li>
+                <li><a href="?type=admin"><i class="fas fa-user-shield">&nbsp; Admin Login</i></a></li>
+            </ul>
+        </div>
+        <div class="main-content" id="main-content">
+            <?php
+            if (isset($error)) {
+                echo "<p style='color: red;'>$error</p>";
+            }
+
+            $type = $_GET['type'] ?? 'emp';
+
+            if ($type === 'emp') {
+                ?>
+                <div class="login-container">
+                    <h2>Employee Login</h2>
+                    <form method="POST">
+                        <input type="text" name="username" placeholder="Username" required>
+                        <input type="password" name="password" placeholder="Password" required>
+                        <input type="hidden" name="usertype" value="emp">
+                        <button type="submit">Login</button>
+                    </form>
+                    <p>Forgot password? <a href="?type=password-recovery">Reset here</a></p>
+                </div>
+                <?php
+            } elseif ($type === 'password-recovery') {
+                ?>
+                <div class="login-container">
+                    <h2>Password Recovery</h2>
+                    <form method="POST">
+                        <input type="email" name="email" placeholder="Email" required>
+                        <button type="submit">Reset Password</button>
+                    </form>
+                    <p>Remember your password? <a href="?type=emp">Login here</a></p>
+                </div>
+                <?php
+            } elseif ($type === 'admin') {
+                ?>
+                <div class="login-container">
+                    <h2>Admin Login</h2>
+                    <form method="POST">
+                        <input type="text" name="username" placeholder="Admin Username" required>
+                        <input type="password" name="password" placeholder="Admin Password" required>
+                        <input type="hidden" name="usertype" value="admin">
+                        <button type="submit">Login</button>
+                    </form>
+                </div>
+                <?php
+            }
+            ?>
+        </div>
+    </div>
+</body>
+</html>
+below is the css
+body {
+		font-family: -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		min-height: 100vh;
+        }
+        header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            text-align: left;
+        }
+        .container {
+            display: flex;
+            flex: 1;
+        }
+        .sidebar {
+            width: 200px;
+            background-color: #f0f0f0;
+            padding: 20px;
+            border-right: 1px solid #ccc;
+        }
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .sidebar li {
+            margin-bottom: 10px;
+        }
+        .sidebar a {
+            display: block;
+            color: #337ab7;
+            padding: 16px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #555;
+            color: white;
+        }
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+        }
+        .login-container, .signup-container {
+            width: 300px;
+            margin: 50px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .login-container h2, .signup-container h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .login-container form, .signup-container form {
+            display: flex;
+            flex-direction: column;
+        }
+        .login-container input, .signup-container input {
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .login-container button, .signup-container button {
+            background-color: #4CAF50;
+            color: #fff;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .login-container button:hover, .signup-container button:hover {
+            background-color: #3e8e41;
+        }
+        .login-container p, .signup-container p {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .login-container a, .signup-container a {
+            text-decoration: none;
+            color: #4CAF50;
+        }
+        .login-container a:hover, .signup-container a:hover {
+            color: #3e8e41;
+        }
+        .logout-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .logout-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background-color: #f44336;
+            border-radius: 50%;
+            color: white;
+            text-decoration: none;
+            transition: background-color 0.3s, transform 0.3s;
+        }
+        .logout-btn:hover {
+            background-color: #d32f2f;
+            transform: scale(1.1);
+        }
+        .logout-btn i {
+            font-size: 20px;
+        } 
+ChatGPT said:
+ChatGPT
+To create a more visually appealing admin dashboard based on your provided CSS and requirements, I've structured the HTML and PHP using mysqli for database connections. The following example includes a sidebar with dropdown menus for Departments, Leave Types, and Employees, along with a clean and elegant layout.
+
+File Structure
+bash
+Copy code
+/admin_dashboard
+    ├── index.php
+    ├── add_department.php
+    ├── manage_department.php
+    ├── connection.php
+    ├── style.css
+connection.php (Database Connection)
+php
+Copy code
+<?php
+$host = 'localhost';
+$user = 'your_username';
+$pass = 'your_password';
+$db = 'employee_system';
+
+$con = new mysqli($host, $user, $pass, $db);
+
+if ($con->connect_error) {
+    die("Connection failed: " . $con->connect_error);
+}
+?>
+index.php (Admin Dashboard)
+php
+Copy code
+<?php
+session_start();
+require_once 'connection.php';
+
+// Ensure the admin is logged in
+if (!isset($_SESSION["usertype"]) || $_SESSION["usertype"] !== 'admin') {
+    header("Location: index.php"); // Redirect to login if not admin
+    exit();
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="authcss/auth_styles.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h4>Admin Dashboard</h4>
+        <div class="logout-container">
+            <a href="logout.php" class="logout-btn"><i class="fas fa-sign-out-alt"></i></a>
+        </div>
+    </header>
+    <div class="container">
+        <div class="sidebar">
+            <div class="profile">
+                <img src="profile-pic.jpg" alt="Profile Picture">
+                <h3><?php echo $_SESSION["username"]; ?></h3>
+            </div>
+            <ul>
+                <li>
+                    <a href="#">Dashboard</a>
+                </li>
+                <li>
+                    <a href="#">Department <i class="fas fa-caret-down"></i></a>
+                    <ul>
+                        <li><a href="add_department.php">Add Department</a></li>
+                        <li><a href="manage_department.php">Manage Department</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#">Leave Type <i class="fas fa-caret-down"></i></a>
+                    <ul>
+                        <li><a href="#">Casual Leave</a></li>
+                        <li><a href="#">Official Leave</a></li>
+                        <li><a href="#">Sick Leave</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#">Employee <i class="fas fa-caret-down"></i></a>
+                    <ul>
+                        <li><a href="#">Add Employee</a></li>
+                        <li><a href="#">Manage Employee</a></li>
+                    </ul>
+                </li>
+                <li><a href="#">Change Password</a></li>
+                <li><a href="#">Sign Out</a></li>
+            </ul>
+        </div>
+        <div class="main-content">
+            <h1>Welcome, Admin!</h1>
+            <p>Select an option from the sidebar to manage the system.</p>
+        </div>
+    </div>
+</body>
+</html>
+add_department.php (Add Department Form)
+php
+Copy code
+<?php
+session_start();
+require_once 'connection.php';
+
+if (!isset($_SESSION["usertype"]) || $_SESSION["usertype"] !== 'admin') {
+    header("Location: index.php");
+    exit();
+}
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $name = htmlspecialchars(trim($_POST["name"]));
+    $short_name = htmlspecialchars(trim($_POST["short_name"]));
+    $code = htmlspecialchars(trim($_POST["code"]));
+
+    $sql = "INSERT INTO departments (name, short_name, code) VALUES (?, ?, ?)";
+    $stmt = $con->prepare($sql);
+    $stmt->bind_param("sss", $name, $short_name, $code);
+    $stmt->execute();
+    $stmt->close();
+    $message = "Department added successfully!";
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Department</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="authcss/auth_styles.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h4>Add Department</h4>
+    </header>
+    <div class="container">
+        <div class="sidebar">
+            <!-- Sidebar content (same as index.php) -->
+        </div>
+        <div class="main-content">
+            <h1>Add Department</h1>
+            <form method="POST">
+                <label for="name">Department Name:</label>
+                <input type="text" id="name" name="name" required>
+                <label for="short_name">Short Name:</label>
+                <input type="text" id="short_name" name="short_name" required>
+                <label for="code">Department Code:</label>
+                <input type="text" id="code" name="code" required>
+                <button type="submit">Add Department</button>
+            </form>
+            <?php if (isset($message)) echo "<p>$message</p>"; ?>
+        </div>
+    </div>
+</body>
+</html>
+manage_department.php (Manage Departments)
+php
+Copy code
+<?php
+session_start();
+require_once 'connection.php';
+
+if (!isset($_SESSION["usertype"]) || $_SESSION["usertype"] !== 'admin') {
+    header("Location: index.php");
+    exit();
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Departments</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="authcss/auth_styles.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h4>Manage Departments</h4>
+    </header>
+    <div class="container">
+        <div class="sidebar">
+            <!-- Sidebar content (same as index.php) -->
+        </div>
+        <div class="main-content">
+            <h1>Manage Departments</h1>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Short Name</th>
+                        <th>Code</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $result = $con->query("SELECT * FROM departments");
+                    while ($row = $result->fetch_assoc()) {
+                        echo "<tr>
+                            <td>{$row['id']}</td>
+                            <td>{$row['name']}</td>
+                            <td>{$row['short_name']}</td>
+                            <td>{$row['code']}</td>
+                            <td>
+                                <a href='edit_department.php?id={$row['id']}'><i class='fas fa-edit'></i></a>
+                                <a href='delete_department.php?id={$row['id']}'><i class='fas fa-trash'></i></a>
+                            </td>
+                        </tr>";
+                    }
+                    ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
+style.css (Enhanced Styles)
+Add the following CSS rules to your existing style.css to improve the dashboard's appearance.
+
+css
+Copy code
+body {
+    font-family: -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+header {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px;
+    text-align: left;
+    position: relative;
+}
+
+.logout-container {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+.sidebar {
+    width: 200px;
+    background-color: #f0f0f0;
+    padding: 20px;
+    border-right: 1px solid #ccc;
+}
+
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar li {
+    margin-bottom: 10px;
+    position: relative;
+}
+
+.sidebar a {
+    display: block;
+    color: #337ab7;
+    padding: 16px;
+    text-decoration: none;
+}
+
+.sidebar a:hover {
+    background-color: #555;
+    color: white;
